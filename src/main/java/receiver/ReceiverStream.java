@@ -149,7 +149,6 @@ public class ReceiverStream {
     }
 
 
-
     public ReceiverStream(List<Component> components, ReceiverConfig receiverConfig) throws Exception {
 
         if(components.isEmpty()) {

@@ -60,3 +60,10 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+application {
+    applicationDefaultJvmArgs = listOf(
+        "-XX:+UseZGC",
+        "-XX:+ZGenerational",
+    )
+}
