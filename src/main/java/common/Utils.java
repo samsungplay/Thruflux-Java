@@ -134,7 +134,7 @@ public class Utils {
     public static RemoteCandidate deserializeCandidate(SerializedCandidate candidate, Component component) throws UnknownHostException {
         CandidateType candidateType = CandidateType.parse(candidate.type());
         TransportAddress transportAddress = new TransportAddress(InetAddress.getByName(candidate.ip()),
-                candidate.port(), Transport.TCP);
+                candidate.port(), Transport.UDP);
 
         return new RemoteCandidate(
                 transportAddress,
@@ -147,7 +147,7 @@ public class Utils {
                                 new TransportAddress(
                                         InetAddress.getByName(candidate.relatedCandidate().ip()),
                                         candidate.relatedCandidate().port(),
-                                        Transport.TCP
+                                        Transport.UDP
                                 ),
                                 component,
                                 CandidateType.parse(candidate.relatedCandidate().type()),

@@ -48,7 +48,7 @@ public class IceHandler {
         if (c == null) return false;
         TransportAddress ta = c.getTransportAddress();
         if (ta == null) return false;
-        if (ta.getTransport() != Transport.TCP) return false;
+        if (ta.getTransport() != Transport.UDP) return false;
         return shouldSendAddress(ta.getAddress());
     }
 
@@ -65,14 +65,14 @@ public class IceHandler {
         agent.setControlling(isSender);
         for (StunServer stunServer : stunServers) {
             TransportAddress stunAddr = new TransportAddress(
-                    InetAddress.getByName(stunServer.host()), stunServer.port(), Transport.TCP
+                    InetAddress.getByName(stunServer.host()), stunServer.port(), Transport.UDP
             );
             agent.addCandidateHarvester(new StunCandidateHarvester(stunAddr));
         }
 
         for (TurnServer turnServer : turnServers) {
             TransportAddress turnAddr = new TransportAddress(
-                    InetAddress.getByName(turnServer.host()), turnServer.port(), Transport.TCP
+                    InetAddress.getByName(turnServer.host()), turnServer.port(), Transport.UDP
             );
             LongTermCredential credential = new LongTermCredential(turnServer.username(), turnServer.password());
             agent.addCandidateHarvester(new TurnCandidateHarvester(turnAddr, credential));
