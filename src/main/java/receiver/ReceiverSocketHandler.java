@@ -112,7 +112,7 @@ public class ReceiverSocketHandler {
 
                             });
 
-                } catch (UnknownHostException e) {
+                } catch (Exception e) {
                     ReceiverLogger.error("Failed to connect to host: " + e.getMessage());
                 }
             });

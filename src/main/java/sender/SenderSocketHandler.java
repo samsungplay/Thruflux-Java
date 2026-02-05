@@ -120,7 +120,8 @@ public class SenderSocketHandler {
                     );
 
                     session.getRemote().sendString(mapper.writeValueAsString(acceptTransferSessionPayload), WriteCallback.NOOP);
-                } catch (IOException ignored) {
+                } catch (Exception e) {
+                    SenderLogger.error("Failed to reach receiver: " + e.getMessage());
                     receiverInfo.getStatus().set("UNREACHABLE");
                 }
             });
