@@ -54,6 +54,9 @@ public class ReceiverStream {
 
     private static final int HDR = 12;
 
+    private final AtomicLong lastReportBytes = new AtomicLong(0);
+    private final AtomicLong lastReportNano = new AtomicLong(0);
+    private final AtomicLong ewmaBpsBits = new AtomicLong(Double.doubleToRawLongBits(0.0));
 
 
     private void handleStream(QuicStream stream) {
@@ -101,6 +104,9 @@ public class ReceiverStream {
                 }
                 ReceiverLogger.info("Initialized receive: " + fileName + " size=" + fileSize + " chunkSize=" + chunkSize);
                 startTime = System.currentTimeMillis();
+                lastReportBytes.set(0);
+                lastReportNano.set(System.nanoTime());
+                ewmaBpsBits.set(Double.doubleToRawLongBits(0.0));
             }
             else {
                 if (size != fileSize || cs != chunkSize) {
@@ -193,9 +199,44 @@ public class ReceiverStream {
 
         progressReporter.scheduleAtFixedRate(() -> {
             long size = fileSize;
-            if (size > 0) {
-                ReceiverLogger.info("Received: " + Utils.sizeToReadableFormat(receivedByts.get()) + "/" + Utils.sizeToReadableFormat(size));
+            if (size <= 0) return;
+
+            long nowNs = System.nanoTime();
+            long nowBytes = receivedByts.get();
+
+            long prevNs = lastReportNano.getAndSet(nowNs);
+            long prevBytes = lastReportBytes.getAndSet(nowBytes);
+
+            long dtNs = nowNs - prevNs;
+            long dBytes = nowBytes - prevBytes;
+
+            if (dtNs <= 0 || dBytes < 0) return;
+
+            double dtSec = dtNs / 1_000_000_000.0;
+
+            double instBps = dBytes / dtSec;
+
+            final double halfLifeSec = 2.0;
+            double alpha = 1.0 - Math.exp(-Math.log(2.0) * (dtSec / halfLifeSec));
+
+            while (true) {
+                long oldBits = ewmaBpsBits.get();
+                double old = Double.longBitsToDouble(oldBits);
+                double updated = old + alpha * (instBps - old);
+                long newBits = Double.doubleToRawLongBits(updated);
+                if (ewmaBpsBits.compareAndSet(oldBits, newBits)) {
+                    break;
+                }
             }
+
+            double ewmaBps = Double.longBitsToDouble(ewmaBpsBits.get());
+            double ewmaMBps = ewmaBps / 1_000_000.0;
+
+            ReceiverLogger.info(
+                    "Received: " + Utils.sizeToReadableFormat(nowBytes) + "/" + Utils.sizeToReadableFormat(size) +
+                            String.format(" (%.2f MB/s ewma)", ewmaMBps)
+            );
+
         }, 250, 250, TimeUnit.MILLISECONDS);
 
         Thread diskThread = new Thread(() -> {
