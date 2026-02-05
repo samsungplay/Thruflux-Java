@@ -20,9 +20,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyStore;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static common.Utils.*;
 
@@ -242,57 +246,103 @@ public class ReceiverStream {
         }, 250, 250, TimeUnit.MILLISECONDS);
 
         Thread diskThread = new Thread(() -> {
-            FileChannel channel = null;
-            final int STAGING_CAP = 1024 * 1024;
-            final ByteBuffer staging = ByteBuffer.allocateDirect(STAGING_CAP);
-            try {
-                while (!init.get()) {
-                    Thread.sleep(5);
+            AtomicReference<FileChannel> channelRef = new AtomicReference<>(null);
+            final Map<Long, byte[]> pending = new HashMap<>(16384);
+
+            long nextOffset = 0;
+            long pendingBytes = 0;
+            final long MAX_PENDING_BYTES = 256L * 1024 * 1024;
+
+            final Consumer<byte[]> writeOne = (byte[] buf) -> {
+                try {
+                    long filePos = getLongBE(buf, 0);
+                    int len = getIntBE(buf, 8);
+
+                    ByteBuffer bb = ByteBuffer.wrap(buf, HDR, len);
+                    while (bb.hasRemaining()) {
+                        int w = channelRef.get().write(bb, filePos);
+                        filePos += w;
+                    }
+                } catch (IOException ioe) {
+                    throw new RuntimeException(ioe);
                 }
-                channel = FileChannel.open(outFile, StandardOpenOption.WRITE);
+            };
+
+            try {
+                while (!init.get()) Thread.sleep(5);
+
+                channelRef.set(FileChannel.open(outFile, StandardOpenOption.WRITE));
 
                 while (true) {
                     byte[] buf = queue.poll(50, TimeUnit.MILLISECONDS);
+
                     if (buf == null) {
-                        if (fileSize > 0 && receivedByts.get() >= fileSize && queue.isEmpty()) {
+                        if (fileSize > 0 && nextOffset >= fileSize && queue.isEmpty() && pending.isEmpty()) {
                             break;
                         }
                         continue;
                     }
 
+                    long off = getLongBE(buf, 0);
+                    int len = getIntBE(buf, 8);
 
-                    long filePos = getLongBE(buf, 0);
-                    int remaining = getIntBE(buf, 8);
+                    if (off == nextOffset) {
+                        writeOne.accept(buf);
+                        bufferPool.offer(buf);
+                        nextOffset += len;
 
-                    int srcOff = HDR;
+                        while (true) {
+                            byte[] next = pending.remove(nextOffset);
+                            if (next == null) break;
 
-                    while (remaining > 0) {
-                        int n = Math.min(remaining, staging.capacity());
-                        staging.clear();
-                        staging.put(buf, srcOff, n);
-                        staging.flip();
+                            int nlen = getIntBE(next, 8);
+                            pendingBytes -= nlen;
 
-                        long p = filePos;
-                        while (staging.hasRemaining()) {
-                            int w = channel.write(staging, p);
-                            p += w;
+                            writeOne.accept(next);
+                            bufferPool.offer(next);
+                            nextOffset += nlen;
                         }
+                    } else {
+                        pending.put(off, buf);
+                        pendingBytes += len;
 
-                        filePos += n;
-                        srcOff += n;
-                        remaining -= n;
+                        while (pendingBytes > MAX_PENDING_BYTES) {
+                            byte[] next = pending.remove(nextOffset);
+                            if (next == null) {
+                                Thread.sleep(1);
+                                continue;
+                            }
+
+                            int nlen = getIntBE(next, 8);
+                            pendingBytes -= nlen;
+
+                            writeOne.accept(next);
+                            bufferPool.offer(next);
+                            nextOffset += nlen;
+
+                            while (true) {
+                                byte[] more = pending.remove(nextOffset);
+                                if (more == null) break;
+
+                                int mlen = getIntBE(more, 8);
+                                pendingBytes -= mlen;
+
+                                writeOne.accept(more);
+                                bufferPool.offer(more);
+                                nextOffset += mlen;
+                            }
+                        }
                     }
-
-                    bufferPool.offer(buf);
                 }
 
-                channel.force(true);
+                channelRef.get().force(true);
+
             } catch (Exception e) {
                 ReceiverLogger.error("Error while writing disk: " + e.getMessage());
             } finally {
                 diskFlushed.countDown();
-                if (channel != null) {
-                    try { channel.close(); } catch (IOException ignored) {}
+                if (channelRef.get() != null) {
+                    try { channelRef.get().close(); } catch (IOException ignored) {}
                 }
             }
         });
