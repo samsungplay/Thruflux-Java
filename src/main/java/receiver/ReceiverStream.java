@@ -162,7 +162,7 @@ public class ReceiverStream {
         log.logStats(true);
         outDir =  Paths.get(receiverConfig.out);
 
-        int poolSize = 2048;
+        int poolSize = 8192;
         for (int i = 0; i < poolSize; i++) {
             bufferPool.add(new byte[receiverConfig.chunkSize + HDR]);
         }
