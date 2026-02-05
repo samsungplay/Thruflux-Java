@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 public class IceHandler {
 
@@ -107,13 +108,14 @@ public class IceHandler {
             }
             RemoteCandidate remoteCandidate = Utils.deserializeCandidate(serializedCandidate, component);
             component.addRemoteCandidate(remoteCandidate);
-            components.add(component);
         }
 
         agent.addStateChangeListener(evt -> {
             if(evt.getPropertyName().equals(Agent.PROPERTY_ICE_PROCESSING_STATE)) {
                 IceProcessingState state = (IceProcessingState) evt.getNewValue();
-                connectionCallback.accept(state, components);
+                if (state == IceProcessingState.TERMINATED) {
+                   connectionCallback.accept(state, components.stream().filter(c -> c.getSelectedPair() != null).collect(Collectors.toCollection(ArrayList::new)));
+                }
             }
         });
 

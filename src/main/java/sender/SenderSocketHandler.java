@@ -89,7 +89,7 @@ public class SenderSocketHandler {
                     IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(true, senderConfig.totalConnections);
                     IceHandler.establishConnection(joinTransferSessionPayload.getLocalCandidates(), joinTransferSessionPayload.getLocalUfrag(), joinTransferSessionPayload.getLocalPassword(),
                             (state, components) -> {
-                                if (state == IceProcessingState.COMPLETED) {
+                                if (state == IceProcessingState.TERMINATED) {
                                     receiverInfo.getStatus().set("CONNECTED");
                                     SenderLogger.info("ICE Complete.");
                                     for(Component component : components) {
