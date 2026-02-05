@@ -128,21 +128,26 @@ public class ReceiverStream {
                 int len = is.readInt();
 
                 byte[] buf = bufferPool.take();
-                if (len > buf.length - HDR) throw new IOException("buffer len too big: " + len);
-                putLongBE(buf, 0, offset);
-                putIntBE(buf, 8, len);
-                is.readFully(buf, HDR, len);
+                try {
+                    if (len > buf.length - HDR) throw new IOException("buffer len too big: " + len);
+                    putLongBE(buf, 0, offset);
+                    putIntBE(buf, 8, len);
+                    is.readFully(buf, HDR, len);
 
-                ByteBuffer wrapper = ByteBuffer.wrap(buf, HDR, len);
+                    ByteBuffer wrapper = ByteBuffer.wrap(buf, HDR, len);
 
-                while (wrapper.hasRemaining()) {
-                    fileChannel.write(wrapper, offset + wrapper.position() - HDR);
+                    while (wrapper.hasRemaining()) {
+                        fileChannel.write(wrapper, offset + wrapper.position());
+                    }
+
+                    long bytes = receivedByts.addAndGet(len);
+
+                    if (bytes >= fileSize) {
+                        diskFlushed.countDown();
+                    }
                 }
-
-                long bytes = receivedByts.addAndGet(len);
-
-                if(bytes >= fileSize) {
-                    diskFlushed.countDown();
+                finally {
+                    bufferPool.offer(buf);
                 }
             }
 
