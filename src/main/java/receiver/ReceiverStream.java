@@ -273,8 +273,10 @@ public class ReceiverStream {
                     long offset = getLongBE(buf, 0);
                     int length = getIntBE(buf, 8);
 
-                    ByteBuffer byteBuffer = ByteBuffer.wrap(buf, HDR, length);
-                    while(byteBuffer.hasRemaining()) {
+                    ByteBuffer byteBuffer = ByteBuffer.wrap(buf);
+                    byteBuffer.position(HDR);
+                    byteBuffer.limit(HDR + length);
+                    while (byteBuffer.hasRemaining()) {
                         int w = channel.write(byteBuffer, offset);
                         offset += w;
                     }

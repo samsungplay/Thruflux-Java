@@ -37,6 +37,8 @@ public class SenderStream {
     private static final byte CTRL_OK = 5;
     private ArrayBlockingQueue<byte[]> bufferPool;
     private static int HDR = 12;
+    private static final int CHUNK_FRAME_HDR = 1 + 4 + 8 + 4;
+    private static final int BATCH_BYTES = 1024 * 1024;
 
     public SenderStream(
             List<Component> components,
@@ -170,32 +172,74 @@ public class SenderStream {
                 ioHandler.submit(() -> {
                     try {
                         QuicStream stream = connection.createStream(true);
-                        try (DataOutputStream os = new DataOutputStream(new BufferedOutputStream(stream.getOutputStream(), 256 * 1024))) {
-                            writeMetadata(os, fileSize, fileNameBytes, chunkSize);
 
-                            while (true) {
-                                byte[] buf = queue.poll(50, TimeUnit.MILLISECONDS);
-                                if (buf == null) {
-                                    if (diskDone.get() && queue.isEmpty()) {
-                                        break;
-                                    }
-                                    continue;
+                        BufferedOutputStream out = new BufferedOutputStream(stream.getOutputStream(), 256 * 1024);
+                        DataOutputStream meta = new DataOutputStream(out);
+                        writeMetadata(meta, fileSize, fileNameBytes, chunkSize);
+                        meta.flush();
+
+                        byte[] batch = new byte[BATCH_BYTES];
+                        int pos = 0;
+
+                        while (true) {
+                            byte[] buf = queue.poll(2, TimeUnit.MILLISECONDS);
+
+                            if (buf == null) {
+                                if (diskDone.get() && queue.isEmpty()) break;
+
+                                if (pos > 0) {
+                                    out.write(batch, 0, pos);
+                                    pos = 0;
                                 }
+                                continue;
+                            }
 
-                                long offset = getLongBE(buf, 0);
-                                int len = getIntBE(buf, 8);
+                            long offset = getLongBE(buf, 0);
+                            int len = getIntBE(buf, 8);
 
-                                os.writeByte(CHUNK);
-                                os.writeInt(0);
-                                os.writeLong(offset);
-                                os.writeInt(len);
-                                os.write(buf, HDR, len);
+                            int need = CHUNK_FRAME_HDR + len;
+                            if (need > batch.length) {
+                                if (pos > 0) {
+                                    out.write(batch, 0, pos);
+                                    pos = 0;
+                                }
+                                batch[0] = CHUNK;
+                                putIntBE(batch, 1, 0);
+                                putLongBE(batch, 5, offset);
+                                putIntBE(batch, 13, len);
+                                out.write(batch, 0, CHUNK_FRAME_HDR);
+                                out.write(buf, HDR, len);
 
                                 sentBytes.addAndGet(len);
                                 bufferPool.put(buf);
+                                continue;
                             }
-                            os.flush();
+
+                            if (pos + need > batch.length) {
+                                out.write(batch, 0, pos);
+                                pos = 0;
+                            }
+
+                            batch[pos] = CHUNK;
+                            putIntBE(batch, pos + 1, 0);
+                            putLongBE(batch, pos + 5, offset);
+                            putIntBE(batch, pos + 13, len);
+                            System.arraycopy(buf, HDR, batch, pos + CHUNK_FRAME_HDR, len);
+                            pos += need;
+
+                            sentBytes.addAndGet(len);
+                            bufferPool.put(buf);
+
+                            if (pos >= (batch.length * 3) / 4) {
+                                out.write(batch, 0, pos);
+                                pos = 0;
+                            }
                         }
+
+                        if (pos > 0) out.write(batch, 0, pos);
+                        out.flush();
+                        out.close();
+
                     } catch (Exception e) {
                         SenderLogger.error("Error while sending data: " + e.getMessage());
                     } finally {
