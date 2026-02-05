@@ -87,8 +87,8 @@ public class SenderStream {
         int chunkSize = config.chunkSize;
         int totalStreams = config.totalStreams;
 
-        int queueCapacity = 8192;
-        int bufferPoolSize = 8192;
+        int queueCapacity = 4096;
+        int bufferPoolSize = 4096;
 
         bufferPool = new ArrayBlockingQueue<>(bufferPoolSize);
 
