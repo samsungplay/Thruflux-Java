@@ -1,29 +1,67 @@
 import org.gradle.jvm.application.tasks.CreateStartScripts
+import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.bundling.Jar
+import org.gradle.kotlin.dsl.application
+import org.gradle.kotlin.dsl.invoke
 
 plugins {
     id("java")
     id("application")
 }
 
-tasks.register<CreateStartScripts>("serverDist") {
+
+tasks.named<Jar>("jar") {
+    manifest { attributes["Implementation-Title"] = "thruflux" }
+}
+
+val serverStartScripts = tasks.register<CreateStartScripts>("serverStartScripts") {
     applicationName = "thruflux-server"
     mainClass.set("server.ServerEntryPoint")
-    classpath = sourceSets.main.get().runtimeClasspath
-    outputDir = layout.buildDirectory.dir("install/thruflux-server/bin").get().asFile
+    classpath = files(tasks.named("jar"), configurations.runtimeClasspath)
+    outputDir = layout.buildDirectory.dir("tmp/serverScripts").get().asFile
 }
 
-tasks.register<CreateStartScripts>("senderDist") {
+tasks.register<Sync>("serverInstall") {
+    dependsOn(tasks.named("jar"), serverStartScripts)
+
+    into(layout.buildDirectory.dir("install/thruflux-server"))
+
+    from(serverStartScripts) { into("bin") }
+
+    from(tasks.named("jar")) { into("lib") }
+    from(configurations.runtimeClasspath) { into("lib") }
+}
+
+val senderStartScripts = tasks.register<CreateStartScripts>("senderStartScripts") {
     applicationName = "thruflux-sender"
     mainClass.set("sender.SenderEntryPoint")
-    classpath = sourceSets.main.get().runtimeClasspath
-    outputDir = layout.buildDirectory.dir("install/thruflux-sender/bin").get().asFile
+    classpath = files(tasks.named("jar"), configurations.runtimeClasspath)
+    outputDir = layout.buildDirectory.dir("tmp/senderScripts").get().asFile
 }
 
-tasks.register<CreateStartScripts>("receiverDist") {
+tasks.register<Sync>("senderInstall") {
+    dependsOn(tasks.named("jar"), senderStartScripts)
+
+    into(layout.buildDirectory.dir("install/thruflux-sender"))
+    from(senderStartScripts) { into("bin") }
+    from(tasks.named("jar")) { into("lib") }
+    from(configurations.runtimeClasspath) { into("lib") }
+}
+
+val receiverStartScripts = tasks.register<CreateStartScripts>("receiverStartScripts") {
     applicationName = "thruflux-receiver"
     mainClass.set("receiver.ReceiverEntryPoint")
-    classpath = sourceSets.main.get().runtimeClasspath
-    outputDir = layout.buildDirectory.dir("install/thruflux-receiver/bin").get().asFile
+    classpath = files(tasks.named("jar"), configurations.runtimeClasspath)
+    outputDir = layout.buildDirectory.dir("tmp/receiverScripts").get().asFile
+}
+
+tasks.register<Sync>("receiverInstall") {
+    dependsOn(tasks.named("jar"), receiverStartScripts)
+
+    into(layout.buildDirectory.dir("install/thruflux-receiver"))
+    from(receiverStartScripts) { into("bin") }
+    from(tasks.named("jar")) { into("lib") }
+    from(configurations.runtimeClasspath) { into("lib") }
 }
 
 tasks.register("runServer", JavaExec::class) {
