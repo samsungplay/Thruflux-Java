@@ -156,8 +156,8 @@ public class ReceiverStream {
             throw new IllegalArgumentException("0 connections formed");
         }
 
-        int queueCapacity = clamp(4*receiverConfig.totalStreams, 512, 8192);
-        int bufferPoolSize = queueCapacity + 2 * receiverConfig.totalStreams;
+        int queueCapacity = 8192;
+        int bufferPoolSize = 8192;
 
         queue = new ArrayBlockingQueue<>(queueCapacity);
         bufferPool = new ArrayBlockingQueue<>(bufferPoolSize);
