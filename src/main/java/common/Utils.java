@@ -211,4 +211,8 @@ public class Utils {
                 ((b[off + 2] & 0xFF) << 8) |
                 (b[off + 3] & 0xFF);
     }
+
+    public static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
 }

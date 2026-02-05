@@ -6,7 +6,6 @@ import org.ice4j.ice.Component;
 import sender.SenderLogger;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.log.NullLogger;
-import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnector;
@@ -20,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyStore;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,11 +41,11 @@ public class ReceiverStream {
     private Path outDir;
     private volatile Path outFile;
 
-    private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(2048);
+    private final ArrayBlockingQueue<byte[]> queue;
 
-    private final ArrayBlockingQueue<byte[]> bufferPool = new ArrayBlockingQueue<>(2048);
+    private final ArrayBlockingQueue<byte[]> bufferPool;
 
-    private ServerConnector serverConnector;
+    private List<ServerConnector> serverConnectors;
 
     private final CountDownLatch diskFlushed = new CountDownLatch(1);
 
@@ -149,49 +149,59 @@ public class ReceiverStream {
 
 
 
-    public ReceiverStream(Component component, ReceiverConfig receiverConfig) throws Exception {
+    public ReceiverStream(List<Component> components, ReceiverConfig receiverConfig) throws Exception {
+
+        if(components.isEmpty()) {
+            throw new IllegalArgumentException("0 connections formed");
+        }
+
+        int queueCapacity = clamp(4*receiverConfig.totalStreams, 512, 8192);
+        int bufferPoolSize = queueCapacity + 2 * receiverConfig.totalStreams;
+
+        queue = new ArrayBlockingQueue<>(queueCapacity);
+        bufferPool = new ArrayBlockingQueue<>(bufferPoolSize);
 
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         try (InputStream is = Files.newInputStream(Paths.get("thruflux.p12"))) {
             keyStore.load(is, "changeit".toCharArray());
         }
-        SysOutLogger log = new SysOutLogger();
-        log.logInfo(true);
-        log.logRecovery(true);
-        log.logCongestionControl(true);
-        log.logStats(true);
+
         outDir =  Paths.get(receiverConfig.out);
 
-        int poolSize = 2048;
-        for (int i = 0; i < poolSize; i++) {
+        for (int i = 0; i < bufferPoolSize; i++) {
             bufferPool.add(new byte[receiverConfig.chunkSize + HDR]);
         }
 
-        component.getSocket().setSendBufferSize(receiverConfig.udpWriteBufferBytes);
-        component.getSocket().setReceiveBufferSize(receiverConfig.udpReadBufferBytes);
+        for (Component component : components) {
+            component.getSocket().setSendBufferSize(receiverConfig.udpWriteBufferBytes);
+            component.getSocket().setReceiveBufferSize(receiverConfig.udpReadBufferBytes);
 
-        serverConnector = ServerConnector.builder()
-                .withLogger(new NullLogger())
-//                .withPort(40022)
-                .withSocket(component.getSocket())
-                .withKeyStore(keyStore, "thruflux", "changeit".toCharArray())
-                .withConfiguration(
-                        ServerConnectionConfig.builder()
-                                .maxOpenPeerInitiatedBidirectionalStreams(receiverConfig.quicMaxIncomingStreams)
-                                .maxBidirectionalStreamBufferSize(receiverConfig.quicStreamWindowBytes)
-                                .maxIdleTimeout(30_000)
-                                .maxConnectionBufferSize(receiverConfig.quicConnWindowBytes)
-                                .build()
-                )
-                .build();
+            ServerConnector serverConnector = ServerConnector.builder()
+                    .withLogger(new NullLogger())
+                    .withSocket(component.getSocket())
+                    .withKeyStore(keyStore, "thruflux", "changeit".toCharArray())
+                    .withConfiguration(
+                            ServerConnectionConfig.builder()
+                                    .maxOpenPeerInitiatedBidirectionalStreams(receiverConfig.quicMaxIncomingStreams)
+                                    .maxBidirectionalStreamBufferSize(receiverConfig.quicStreamWindowBytes)
+                                    .maxIdleTimeout(30_000)
+                                    .maxConnectionBufferSize(receiverConfig.quicConnWindowBytes)
+                                    .build()
+                    )
+                    .build();
 
-        serverConnector.registerApplicationProtocol("THRUFLUX",
-                (protocol, connection) -> new ApplicationProtocolConnection() {
-                    @Override
-                    public void acceptPeerInitiatedStream(QuicStream stream) {
+            serverConnector.registerApplicationProtocol("THRUFLUX",
+                    (protocol, connection) -> new ApplicationProtocolConnection() {
+                        @Override
+                        public void acceptPeerInitiatedStream(QuicStream stream) {
                             ReceiverWorker.getIoWorker().submit(() -> handleStream(stream));
-                    }
-                });
+                        }
+                    });
+            serverConnectors.add(serverConnector);
+        }
+
+
+
 
         ScheduledExecutorService progressReporter = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable);
@@ -268,7 +278,7 @@ public class ReceiverStream {
                         offset += w;
                     }
 
-                    bufferPool.offer(buf);
+                    bufferPool.put(buf);
                 }
 
                 channel.force(true);
@@ -288,7 +298,9 @@ public class ReceiverStream {
     }
 
     public void receiveTransfer() {
-        serverConnector.start();
+        for (ServerConnector serverConnector : serverConnectors) {
+            serverConnector.start();
+        }
 
         try {
             done.await();
@@ -296,7 +308,7 @@ public class ReceiverStream {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
-            serverConnector.close();
+            for(ServerConnector serverConnector : serverConnectors) serverConnector.close();
             ReceiverWorker.getIoWorker().shutdown();
             System.exit(0);
         }

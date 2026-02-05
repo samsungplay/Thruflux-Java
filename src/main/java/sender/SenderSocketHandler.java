@@ -94,18 +94,18 @@ public class SenderSocketHandler {
                                     for(Component component : components) {
                                         SenderLogger.info("component id=" + component.getComponentID() + ", pair=" + component.getSelectedPair().toShortString());
                                     }
-//                                    SenderWorker.getIoWorker().submit(() -> {
-//                                        try {
-//                                            receiverInfo.getStatus().set("SENDING");
-//                                            SenderStream senderStream = new SenderStream(component, senderConfig);
-//                                            senderStream.sendTransfer();
-//                                        }
-//                                        catch(Exception e) {
-//                                            e.printStackTrace();
-//                                            SenderLogger.error("OOF: " + e.getMessage());
-//                                            receiverInfo.getStatus().set("FAILED");
-//                                        }
-//                                    });
+                                    SenderWorker.getIoWorker().submit(() -> {
+                                        try {
+                                            receiverInfo.getStatus().set("SENDING");
+                                            SenderStream senderStream = new SenderStream(components, senderConfig);
+                                            senderStream.sendTransfer();
+                                        }
+                                        catch(Exception e) {
+                                            e.printStackTrace();
+                                            SenderLogger.error("OOF: " + e.getMessage());
+                                            receiverInfo.getStatus().set("FAILED");
+                                        }
+                                    });
                                 if(components.isEmpty()) {
                                     receiverInfo.getStatus().set("UNREACHABLE");
                                 }

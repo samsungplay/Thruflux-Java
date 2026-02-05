@@ -5,6 +5,7 @@ import common.Utils;
 import org.ice4j.TransportAddress;
 import org.ice4j.ice.Component;
 import tech.kwik.core.QuicClientConnection;
+import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 
 import java.io.*;
@@ -16,6 +17,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -24,7 +27,7 @@ import static common.Utils.*;
 
 public class SenderStream {
 
-    private final QuicClientConnection connection;
+    private final List<QuicClientConnection> connections = new ArrayList<>();
     private final Path file;
     private SenderConfig config;
     private static final byte FILE_METADATA = 1;
@@ -36,32 +39,39 @@ public class SenderStream {
     private static int HDR = 12;
 
     public SenderStream(
-            Component component,
+            List<Component> components,
             SenderConfig senderConfig
-    ) throws SocketException, UnknownHostException, IllegalStateException {
+    ) throws SocketException, UnknownHostException, IllegalStateException, IllegalArgumentException {
 
         if (SenderStateHolder.getManifest() == null ||
                 SenderStateHolder.getManifest().getPaths().isEmpty()) {
             throw new IllegalStateException("No transfer is active");
         }
 
-        component.getSocket().setSendBufferSize(senderConfig.udpWriteBufferBytes);
-        component.getSocket().setReceiveBufferSize(senderConfig.udpReadBufferBytes);
+        if (components.isEmpty()) {
+            throw new IllegalArgumentException("0 connections formed");
+        }
 
-        TransportAddress remoteAddress = component.getSelectedPair().getRemoteCandidate().getTransportAddress();
+        for (Component component : components) {
+            component.getSocket().setSendBufferSize(senderConfig.udpWriteBufferBytes);
+            component.getSocket().setReceiveBufferSize(senderConfig.udpReadBufferBytes);
 
-        this.connection = QuicClientConnection.newBuilder()
-                .host(remoteAddress.getHostAddress())
-                .port(remoteAddress.getPort())
-                .applicationProtocol("THRUFLUX")
-                .socketFactory(addr -> component.getSocket())
-                .noServerCertificateCheck()
-                .connectTimeout(Duration.ofSeconds(30))
-                .maxOpenPeerInitiatedBidirectionalStreams(senderConfig.quicMaxIncomingStreams)
-                .defaultStreamReceiveBufferSize(senderConfig.quicStreamWindowBytes)
-                .maxIdleTimeout(Duration.ofSeconds(30))
-                .build();
+            TransportAddress remoteAddress = component.getSelectedPair().getRemoteCandidate().getTransportAddress();
 
+            QuicClientConnection connection = QuicClientConnection.newBuilder()
+                    .host(remoteAddress.getHostAddress())
+                    .port(remoteAddress.getPort())
+                    .applicationProtocol("THRUFLUX")
+                    .socketFactory(addr -> component.getSocket())
+                    .noServerCertificateCheck()
+                    .connectTimeout(Duration.ofSeconds(30))
+                    .maxOpenPeerInitiatedBidirectionalStreams(senderConfig.quicMaxIncomingStreams)
+                    .defaultStreamReceiveBufferSize(senderConfig.quicStreamWindowBytes)
+                    .maxIdleTimeout(Duration.ofSeconds(30))
+                    .build();
+
+            connections.add(connection);
+        }
 
         file = Paths.get(SenderStateHolder.getManifest().getPaths().get(0));
         config = senderConfig;
@@ -75,14 +85,15 @@ public class SenderStream {
         int chunkSize = config.chunkSize;
         int totalStreams = config.totalStreams;
 
-        int poolSize = 2048;
-        bufferPool = new ArrayBlockingQueue<>(poolSize);
+        int queueCapacity = clamp(4*config.totalStreams, 512, 8192);
+        int bufferPoolSize = queueCapacity + 2 * config.totalStreams;
 
-        for (int i = 0; i < poolSize; i++) {
+        bufferPool = new ArrayBlockingQueue<>(bufferPoolSize);
+
+        for (int i = 0; i < bufferPoolSize; i++) {
             bufferPool.add(new byte[chunkSize + HDR]);
         }
 
-        int queueCapacity = 2048;
         ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(queueCapacity);
         AtomicLong sentBytes = new AtomicLong(0);
         AtomicBoolean diskDone = new AtomicBoolean(false);
@@ -99,8 +110,12 @@ public class SenderStream {
                     Utils.sizeToReadableFormat(fileSize));
         }, 250, 250, TimeUnit.MILLISECONDS);
 
+
         SenderLogger.info("Connecting to receiver...");
-        connection.connect();
+
+        for (QuicClientConnection connection : connections) {
+            connection.connect();
+        }
 
         ExecutorService ioHandler = Executors.newFixedThreadPool(totalStreams, runnable -> {
             Thread thread = new Thread(runnable);
@@ -139,42 +154,57 @@ public class SenderStream {
 
         CountDownLatch networkDone = new CountDownLatch(totalStreams);
 
-        for (int i = 0; i < totalStreams; i++) {
-            ioHandler.submit(() -> {
-                try {
-                    QuicStream stream = connection.createStream(true);
-                    try (DataOutputStream os = new DataOutputStream(new BufferedOutputStream(stream.getOutputStream(), 256 * 1024))) {
-                    writeMetadata(os, fileSize, fileNameBytes, chunkSize);
+        int totalConnections = connections.size();
+        int base = totalStreams / totalConnections;
+        int rem  = totalStreams % totalConnections;
 
-                        while (true) {
-                            byte[] buf = queue.poll(50, TimeUnit.MILLISECONDS);
-                            if (buf == null) {
-                                if (diskDone.get() && queue.isEmpty()) {
-                                    break;
+
+        int streamsPerConnection = Math.max(1,totalStreams / connections.size());
+
+        for (int i = 0; i < connections.size(); i++) {
+
+            QuicClientConnection connection = connections.get(i);
+            int streamsThisConn = base + (i < rem ? 1 : 0);
+
+            for(int j=0; j<streamsThisConn; j++) {
+                ioHandler.submit(() -> {
+                    try {
+                        QuicStream stream = connection.createStream(true);
+                        try (DataOutputStream os = new DataOutputStream(new BufferedOutputStream(stream.getOutputStream(), 256 * 1024))) {
+                            writeMetadata(os, fileSize, fileNameBytes, chunkSize);
+
+                            while (true) {
+                                byte[] buf = queue.poll(50, TimeUnit.MILLISECONDS);
+                                if (buf == null) {
+                                    if (diskDone.get() && queue.isEmpty()) {
+                                        break;
+                                    }
+                                    continue;
                                 }
-                                continue;
+
+                                long offset = getLongBE(buf, 0);
+                                int len = getIntBE(buf, 8);
+
+                                os.writeByte(CHUNK);
+                                os.writeInt(0);
+                                os.writeLong(offset);
+                                os.writeInt(len);
+                                os.write(buf, HDR, len);
+
+                                sentBytes.addAndGet(len);
+                                bufferPool.put(buf);
                             }
-
-                            long offset = getLongBE(buf, 0);
-                            int len = getIntBE(buf, 8);
-
-                            os.writeByte(CHUNK);
-                            os.writeInt(0);
-                            os.writeLong(offset);
-                            os.writeInt(len);
-                            os.write(buf, HDR, len);
-
-                            sentBytes.addAndGet(len);
-                            bufferPool.offer(buf);
+                            os.flush();
                         }
-                        os.flush();
+                    } catch (Exception e) {
+                        SenderLogger.error("Error while sending data: " + e.getMessage());
+                    } finally {
+                        networkDone.countDown();
                     }
-                } catch (Exception e) {
-                    SenderLogger.error("Error while sending data: " + e.getMessage());
-                } finally {
-                    networkDone.countDown();
-                }
-            });
+                });
+
+            }
+
         }
 
 
@@ -187,14 +217,15 @@ public class SenderStream {
         } finally {
             progressReporter.shutdownNow();
             ioHandler.shutdown();
-            connection.close();
+            for(QuicClientConnection connection : connections)
+                connection.close();
         }
 
 
     }
 
     private void waitAcknowledgement() throws IOException {
-        QuicStream controlStream = connection.createStream(true);
+        QuicStream controlStream = connections.get(0).createStream(true);
 
         try (OutputStream os = controlStream.getOutputStream();
              InputStream is = controlStream.getInputStream()) {

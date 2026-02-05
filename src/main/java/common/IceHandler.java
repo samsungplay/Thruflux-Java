@@ -100,7 +100,6 @@ public class IceHandler {
         iceStream.setRemoteUfrag(remoteUfrag);
         iceStream.setRemotePassword(remotePassword);
 
-        List<Component> components = new ArrayList<>();
 
         for (SerializedCandidate serializedCandidate : remoteCandidates) {
             Component component = iceStream.getComponent(serializedCandidate.componentId());
