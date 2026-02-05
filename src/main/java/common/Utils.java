@@ -102,7 +102,7 @@ public class Utils {
         return new TurnCredentialsPayload(username, password, turnUrl);
     }
 
-    public static SerializedCandidate serializeCandidate(LocalCandidate localCandidate) {
+    public static SerializedCandidate serializeCandidate(LocalCandidate localCandidate, int componentId) {
         TransportAddress transportAddress = localCandidate.getTransportAddress();
         String type = localCandidate.getType().toString();
         LocalCandidate relatedCandidate = localCandidate.getRelatedCandidate();
@@ -110,6 +110,7 @@ public class Utils {
         SerializedCandidate relatedSerialized = null;
         if(relatedCandidate != null) {
             relatedSerialized = new SerializedCandidate(
+                    componentId,
                     relatedCandidate.getType().toString(),
                     relatedCandidate.getFoundation(),
                     relatedCandidate.getPriority(),
@@ -120,6 +121,7 @@ public class Utils {
         }
 
         return new SerializedCandidate(
+                componentId,
                     type,
                 localCandidate.getFoundation(),
                 localCandidate.getPriority(),

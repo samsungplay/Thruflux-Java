@@ -5,6 +5,7 @@ import org.jetbrains.annotations.Nullable;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record SerializedCandidate(
+        int componentId,
         String type,
         String foundation,
         long priority,

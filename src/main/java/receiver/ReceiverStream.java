@@ -41,9 +41,9 @@ public class ReceiverStream {
     private Path outDir;
     private volatile Path outFile;
 
-    private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(8192);
+    private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(2048);
 
-    private final ArrayBlockingQueue<byte[]> bufferPool = new ArrayBlockingQueue<>(8192);
+    private final ArrayBlockingQueue<byte[]> bufferPool = new ArrayBlockingQueue<>(2048);
 
     private ServerConnector serverConnector;
 
@@ -162,7 +162,7 @@ public class ReceiverStream {
         log.logStats(true);
         outDir =  Paths.get(receiverConfig.out);
 
-        int poolSize = 8192;
+        int poolSize = 2048;
         for (int i = 0; i < poolSize; i++) {
             bufferPool.add(new byte[receiverConfig.chunkSize + HDR]);
         }

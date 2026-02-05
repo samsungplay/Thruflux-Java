@@ -27,7 +27,10 @@ public class SenderConfig {
     @CommandLine.Option(names="--chunk-size", defaultValue = "65536")
     int chunkSize;
 
-    @CommandLine.Option(names="--total-streams", defaultValue = "24")
+    @CommandLine.Option(names="--total-connections", defaultValue = "4")
+    int totalConnections;
+
+    @CommandLine.Option(names="--total-streams", defaultValue = "64")
     int totalStreams;
     @CommandLine.Option(names="--udp-read-buffer-bytes", defaultValue = "8388608")
     int udpReadBufferBytes;

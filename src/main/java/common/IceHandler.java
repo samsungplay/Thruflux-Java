@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.stream.Collectors;
 
 public class IceHandler {
 
@@ -42,7 +41,7 @@ public class IceHandler {
         turnServers.add(turnServer);
     }
 
-    public static CandidatesResult gatherAllCandidates(boolean isSender) throws IOException {
+    public static CandidatesResult gatherAllCandidates(boolean isSender, int n) throws IOException {
         Agent agent = new Agent();
         agent.setControlling(isSender);
         for (StunServer stunServer : stunServers) {
@@ -62,21 +61,34 @@ public class IceHandler {
 
 
         IceMediaStream iceStream = agent.createMediaStream("data");
-        Component component = agent.createComponent(iceStream, 50000, 49152, 65535);
+
+        List<Component> components = new ArrayList<>();
+
+        for (int i = 0; i < n; i++) {
+            components.add(agent.createComponent(iceStream, 50000, 49152, 65535));
+        }
+
+        List<SerializedCandidate> serializedCandidates = new ArrayList<>();
+
+        for (int i = 0; i < n; i++) {
+            Component component = components.get(i);
+            for (LocalCandidate localCandidate : component.getLocalCandidates()) {
+                SerializedCandidate serialized = Utils.serializeCandidate(localCandidate,component.getComponentID());
+                serializedCandidates.add(serialized);
+            }
+        }
 
         currentAgent.set(agent);
-
 
         return new CandidatesResult(
                 agent.getLocalUfrag(),
                 agent.getLocalPassword(),
-                component.getLocalCandidates().stream().map(Utils::serializeCandidate)
-                        .collect(Collectors.toCollection(ArrayList::new))
+                serializedCandidates
         );
     }
 
-    public static void startConnection(List<SerializedCandidate> remoteCandidates, String remoteUfrag, String remotePassword,
-                                       BiConsumer<IceProcessingState, Component> connectionCallback) throws IllegalStateException, UnknownHostException {
+    public static void establishConnection(List<SerializedCandidate> remoteCandidates, String remoteUfrag, String remotePassword,
+                                           BiConsumer<IceProcessingState, List<Component>> connectionCallback) throws IllegalStateException, UnknownHostException {
         if (currentAgent.get() == null) {
             throw new IllegalStateException("Cannot start ICE connection because local candidates have not been gathered yet");
         }
@@ -86,17 +98,22 @@ public class IceHandler {
         iceStream.setRemoteUfrag(remoteUfrag);
         iceStream.setRemotePassword(remotePassword);
 
-        Component component = iceStream.getComponent(Component.RTP);
+        List<Component> components = new ArrayList<>();
 
-        for (SerializedCandidate remoteSerialized : remoteCandidates) {
-            RemoteCandidate remoteCandidate = Utils.deserializeCandidate(remoteSerialized, component);
+        for (SerializedCandidate serializedCandidate : remoteCandidates) {
+            Component component = iceStream.getComponent(serializedCandidate.componentId());
+            if(component == null) {
+                throw new IllegalStateException("Total connections mismatch between sender and receiver");
+            }
+            RemoteCandidate remoteCandidate = Utils.deserializeCandidate(serializedCandidate, component);
             component.addRemoteCandidate(remoteCandidate);
+            components.add(component);
         }
 
         agent.addStateChangeListener(evt -> {
             if(evt.getPropertyName().equals(Agent.PROPERTY_ICE_PROCESSING_STATE)) {
                 IceProcessingState state = (IceProcessingState) evt.getNewValue();
-                connectionCallback.accept(state, component);
+                connectionCallback.accept(state, components);
             }
         });
 

@@ -6,6 +6,7 @@ import common.Utils;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WriteCallback;
 import org.eclipse.jetty.websocket.api.annotations.*;
+import org.ice4j.ice.Component;
 import org.ice4j.ice.IceProcessingState;
 import payloads.*;
 
@@ -85,23 +86,27 @@ public class SenderSocketHandler {
             SenderStateHolder.ReceiverInfo receiverInfo = SenderStateHolder.getReceiver(receiverId);
             SenderWorker.getNetworkWorker().submit(() -> {
                 try {
-                    IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(true);
-                    IceHandler.startConnection(joinTransferSessionPayload.getLocalCandidates(), joinTransferSessionPayload.getLocalUfrag(), joinTransferSessionPayload.getLocalPassword(),
-                            (state, component) -> {
+                    IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(true, senderConfig.totalConnections);
+                    IceHandler.establishConnection(joinTransferSessionPayload.getLocalCandidates(), joinTransferSessionPayload.getLocalUfrag(), joinTransferSessionPayload.getLocalPassword(),
+                            (state, components) -> {
                                 if (state == IceProcessingState.COMPLETED) {
                                     receiverInfo.getStatus().set("CONNECTED");
-                                    SenderWorker.getIoWorker().submit(() -> {
-                                        try {
-                                            receiverInfo.getStatus().set("SENDING");
-                                            SenderStream senderStream = new SenderStream(component, senderConfig);
-                                            senderStream.sendTransfer();
-                                        }
-                                        catch(Exception e) {
-                                            e.printStackTrace();
-                                            SenderLogger.error("OOF: " + e.getMessage());
-                                            receiverInfo.getStatus().set("FAILED");
-                                        }
-                                    });
+                                    SenderLogger.info("ICE Complete.");
+                                    for(Component component : components) {
+                                        SenderLogger.info("component id=" + component.getComponentID() + ", pair=" + component.getSelectedPair().toShortString());
+                                    }
+//                                    SenderWorker.getIoWorker().submit(() -> {
+//                                        try {
+//                                            receiverInfo.getStatus().set("SENDING");
+//                                            SenderStream senderStream = new SenderStream(component, senderConfig);
+//                                            senderStream.sendTransfer();
+//                                        }
+//                                        catch(Exception e) {
+//                                            e.printStackTrace();
+//                                            SenderLogger.error("OOF: " + e.getMessage());
+//                                            receiverInfo.getStatus().set("FAILED");
+//                                        }
+//                                    });
 
                                 }
                                 else if(state == IceProcessingState.FAILED) {

@@ -6,11 +6,11 @@ import common.Utils;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WriteCallback;
 import org.eclipse.jetty.websocket.api.annotations.*;
+import org.ice4j.ice.Component;
 import org.ice4j.ice.IceProcessingState;
 import payloads.*;
 
 import java.io.IOException;
-import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -71,7 +71,7 @@ public class ReceiverSocketHandler {
             ReceiverLogger.info("Connecting to host...");
             ReceiverWorker.getNetworkWorker().submit(() -> {
                 try {
-                    IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(false);
+                    IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(false, receiverConfig.totalConnections);
                     session.getRemote().sendString(mapper.writeValueAsString(new JoinTransferSessionPayload(
                             candidatesResult.localUfrag(),
                             candidatesResult.localPassword(),
@@ -91,20 +91,23 @@ public class ReceiverSocketHandler {
             ReceiverLogger.info("Accepted. Starting connection..");
             ReceiverWorker.getNetworkWorker().submit(() -> {
                 try {
-                    IceHandler.startConnection(acceptTransferSessionPayload.getLocalCandidates(),
+                    IceHandler.establishConnection(acceptTransferSessionPayload.getLocalCandidates(),
                             acceptTransferSessionPayload.getLocalUfrag(),
-                            acceptTransferSessionPayload.getLocalPassword(), (state, component) -> {
+                            acceptTransferSessionPayload.getLocalPassword(), (state, components) -> {
                                 if(state == IceProcessingState.COMPLETED) {
                                     ReceiverLogger.info("ICE complete.");
-                                        ReceiverWorker.getIoWorker().submit(() -> {
-                                            try {
-                                                ReceiverStream receiverStream = new ReceiverStream(component, receiverConfig);
-                                                receiverStream.receiveTransfer();
-                                            } catch (Exception e) {
-                                                e.printStackTrace();
-                                                ReceiverLogger.error("Error while receiving transfer : " + e.getMessage());
-                                            }
-                                        });
+                                    for(Component component : components) {
+                                        ReceiverLogger.info("component id=" + component.getComponentID() + ", selected pair=" + component.getSelectedPair().toShortString());
+                                    }
+//                                        ReceiverWorker.getIoWorker().submit(() -> {
+//                                            try {
+//                                                ReceiverStream receiverStream = new ReceiverStream(component, receiverConfig);
+//                                                receiverStream.receiveTransfer();
+//                                            } catch (Exception e) {
+//                                                e.printStackTrace();
+//                                                ReceiverLogger.error("Error while receiving transfer : " + e.getMessage());
+//                                            }
+//                                        });
 
                                 }
 
