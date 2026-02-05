@@ -41,9 +41,7 @@ public class ReceiverStream {
     private Path outDir;
     private volatile Path outFile;
 
-    private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(8192);
-
-    private final ArrayBlockingQueue<byte[]> bufferPool = new ArrayBlockingQueue<>(8192);
+    private final ArrayBlockingQueue<byte[]> bufferPool = new ArrayBlockingQueue<>(2048);
 
     private ServerConnector serverConnector;
 
@@ -57,6 +55,9 @@ public class ReceiverStream {
     private final AtomicLong lastReportBytes = new AtomicLong(0);
     private final AtomicLong lastReportNano = new AtomicLong(0);
     private final AtomicLong ewmaBpsBits = new AtomicLong(Double.doubleToRawLongBits(0.0));
+
+    private volatile FileChannel fileChannel;
+
 
 
     private void handleStream(QuicStream stream) {
@@ -107,6 +108,7 @@ public class ReceiverStream {
                 lastReportBytes.set(0);
                 lastReportNano.set(System.nanoTime());
                 ewmaBpsBits.set(Double.doubleToRawLongBits(0.0));
+                fileChannel = FileChannel.open(outFile, StandardOpenOption.WRITE);
             }
             else {
                 if (size != fileSize || cs != chunkSize) {
@@ -130,8 +132,18 @@ public class ReceiverStream {
                 putLongBE(buf, 0, offset);
                 putIntBE(buf, 8, len);
                 is.readFully(buf, HDR, len);
-                queue.put(buf);
-                receivedByts.addAndGet(len);
+
+                ByteBuffer wrapper = ByteBuffer.wrap(buf, HDR, len);
+
+                while (wrapper.hasRemaining()) {
+                    fileChannel.write(wrapper, offset + wrapper.position() - HDR);
+                }
+
+                long bytes = receivedByts.addAndGet(len);
+
+                if(bytes >= fileSize) {
+                    diskFlushed.countDown();
+                }
             }
 
         }
@@ -239,64 +251,6 @@ public class ReceiverStream {
 
         }, 250, 250, TimeUnit.MILLISECONDS);
 
-        Thread diskThread = new Thread(() -> {
-            FileChannel channel = null;
-            final int STAGING_CAP = 1024 * 1024;
-            final ByteBuffer staging = ByteBuffer.allocateDirect(STAGING_CAP);
-            try {
-                while (!init.get()) {
-                    Thread.sleep(5);
-                }
-                channel = FileChannel.open(outFile, StandardOpenOption.WRITE);
-
-                while (true) {
-                    byte[] buf = queue.poll(50, TimeUnit.MILLISECONDS);
-                    if (buf == null) {
-                        if (fileSize > 0 && receivedByts.get() >= fileSize && queue.isEmpty()) {
-                            break;
-                        }
-                        continue;
-                    }
-
-
-                    long filePos = getLongBE(buf, 0);
-                    int remaining = getIntBE(buf, 8);
-
-                    int srcOff = HDR;
-
-                    while (remaining > 0) {
-                        int n = Math.min(remaining, staging.capacity());
-                        staging.clear();
-                        staging.put(buf, srcOff, n);
-                        staging.flip();
-
-                        long p = filePos;
-                        while (staging.hasRemaining()) {
-                            int w = channel.write(staging, p);
-                            p += w;
-                        }
-
-                        filePos += n;
-                        srcOff += n;
-                        remaining -= n;
-                    }
-
-                    bufferPool.offer(buf);
-                }
-
-                channel.force(true);
-            } catch (Exception e) {
-                ReceiverLogger.error("Error while writing disk: " + e.getMessage());
-            } finally {
-                diskFlushed.countDown();
-                if (channel != null) {
-                    try { channel.close(); } catch (IOException ignored) {}
-                }
-            }
-        });
-
-        diskThread.setDaemon(true);
-        diskThread.start();
 
     }
 
