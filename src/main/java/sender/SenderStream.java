@@ -75,7 +75,7 @@ public class SenderStream {
         int chunkSize = config.chunkSize;
         int totalStreams = config.totalStreams;
 
-        int poolSize = Math.max(256, totalStreams * 64);
+        int poolSize = Math.max(2048, totalStreams * 64);
         bufferPool = new ArrayBlockingQueue<>(poolSize);
 
         for (int i = 0; i < poolSize; i++) {
