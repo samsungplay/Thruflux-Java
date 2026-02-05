@@ -1,6 +1,29 @@
+import org.gradle.jvm.application.tasks.CreateStartScripts
+
 plugins {
     id("java")
     id("application")
+}
+
+tasks.register<CreateStartScripts>("serverDist") {
+    applicationName = "thruflux-server"
+    mainClass.set("server.ServerEntryPoint")
+    classpath = sourceSets.main.get().runtimeClasspath
+    outputDir = layout.buildDirectory.dir("install/thruflux-server/bin").get().asFile
+}
+
+tasks.register<CreateStartScripts>("senderDist") {
+    applicationName = "thruflux-sender"
+    mainClass.set("sender.SenderEntryPoint")
+    classpath = sourceSets.main.get().runtimeClasspath
+    outputDir = layout.buildDirectory.dir("install/thruflux-sender/bin").get().asFile
+}
+
+tasks.register<CreateStartScripts>("receiverDist") {
+    applicationName = "thruflux-receiver"
+    mainClass.set("receiver.ReceiverEntryPoint")
+    classpath = sourceSets.main.get().runtimeClasspath
+    outputDir = layout.buildDirectory.dir("install/thruflux-receiver/bin").get().asFile
 }
 
 tasks.register("runServer", JavaExec::class) {
