@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyStore;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -45,7 +46,7 @@ public class ReceiverStream {
 
     private final ArrayBlockingQueue<byte[]> bufferPool;
 
-    private List<ServerConnector> serverConnectors;
+    private List<ServerConnector> serverConnectors = new ArrayList<>();
 
     private final CountDownLatch diskFlushed = new CountDownLatch(1);
 
