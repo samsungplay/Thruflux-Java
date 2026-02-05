@@ -88,8 +88,7 @@ public class SenderSocketHandler {
                 try {
                     IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(true, senderConfig.totalConnections);
                     IceHandler.establishConnection(joinTransferSessionPayload.getLocalCandidates(), joinTransferSessionPayload.getLocalUfrag(), joinTransferSessionPayload.getLocalPassword(),
-                            (state, components) -> {
-                                if (state == IceProcessingState.TERMINATED) {
+                            ( components) -> {
                                     receiverInfo.getStatus().set("CONNECTED");
                                     SenderLogger.info("ICE Complete.");
                                     for(Component component : components) {
@@ -107,11 +106,11 @@ public class SenderSocketHandler {
 //                                            receiverInfo.getStatus().set("FAILED");
 //                                        }
 //                                    });
-
-                                }
-                                else if(state == IceProcessingState.FAILED) {
+                                if(components.isEmpty()) {
                                     receiverInfo.getStatus().set("UNREACHABLE");
                                 }
+
+
                             });
                     AcceptTransferSessionPayload acceptTransferSessionPayload = new AcceptTransferSessionPayload(
                             candidatesResult.localUfrag(),

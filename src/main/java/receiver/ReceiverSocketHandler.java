@@ -93,8 +93,7 @@ public class ReceiverSocketHandler {
                 try {
                     IceHandler.establishConnection(acceptTransferSessionPayload.getLocalCandidates(),
                             acceptTransferSessionPayload.getLocalUfrag(),
-                            acceptTransferSessionPayload.getLocalPassword(), (state, components) -> {
-                                if(state == IceProcessingState.TERMINATED) {
+                            acceptTransferSessionPayload.getLocalPassword(), ( components) -> {
                                     ReceiverLogger.info("ICE complete.");
                                     for(Component component : components) {
                                         ReceiverLogger.info("component id=" + component.getComponentID() + ", selected pair=" + component.getSelectedPair().toShortString());
@@ -109,7 +108,7 @@ public class ReceiverSocketHandler {
 //                                            }
 //                                        });
 
-                                }
+
 
                             });
 

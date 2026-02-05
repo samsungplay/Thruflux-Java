@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class IceHandler {
@@ -89,7 +90,7 @@ public class IceHandler {
     }
 
     public static void establishConnection(List<SerializedCandidate> remoteCandidates, String remoteUfrag, String remotePassword,
-                                           BiConsumer<IceProcessingState, List<Component>> connectionCallback) throws IllegalStateException, UnknownHostException {
+                                           Consumer<List<Component>> connectionCallback) throws IllegalStateException, UnknownHostException {
         if (currentAgent.get() == null) {
             throw new IllegalStateException("Cannot start ICE connection because local candidates have not been gathered yet");
         }
@@ -114,7 +115,7 @@ public class IceHandler {
             if(evt.getPropertyName().equals(Agent.PROPERTY_ICE_PROCESSING_STATE)) {
                 IceProcessingState state = (IceProcessingState) evt.getNewValue();
                 if (state == IceProcessingState.TERMINATED) {
-                   connectionCallback.accept(state, components.stream().filter(c -> c.getSelectedPair() != null).collect(Collectors.toCollection(ArrayList::new)));
+                   connectionCallback.accept(components.stream().filter(c -> c.getSelectedPair() != null).collect(Collectors.toCollection(ArrayList::new)));
                 }
             }
         });
