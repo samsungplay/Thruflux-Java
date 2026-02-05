@@ -109,14 +109,13 @@ public class IceHandler {
             }
             RemoteCandidate remoteCandidate = Utils.deserializeCandidate(serializedCandidate, component);
             component.addRemoteCandidate(remoteCandidate);
-            components.add(component);
         }
 
         agent.addStateChangeListener(evt -> {
             if(evt.getPropertyName().equals(Agent.PROPERTY_ICE_PROCESSING_STATE)) {
                 IceProcessingState state = (IceProcessingState) evt.getNewValue();
                 if (state == IceProcessingState.TERMINATED) {
-                   connectionCallback.accept(components.stream().filter(c -> c.getSelectedPair() != null).collect(Collectors.toCollection(ArrayList::new)));
+                   connectionCallback.accept(iceStream.getComponents().stream().filter(c -> c.getSelectedPair() != null).collect(Collectors.toCollection(ArrayList::new)));
                 }
             }
         });
