@@ -243,8 +243,6 @@ public class ReceiverStream {
 
         Thread diskThread = new Thread(() -> {
             FileChannel channel = null;
-            final int STAGING_CAP = 1024 * 1024;
-            final ByteBuffer staging = ByteBuffer.allocateDirect(STAGING_CAP);
             try {
                 while (!init.get()) {
                     Thread.sleep(5);
@@ -261,26 +259,13 @@ public class ReceiverStream {
                     }
 
 
-                    long filePos = getLongBE(buf, 0);
-                    int remaining = getIntBE(buf, 8);
+                    long offset = getLongBE(buf, 0);
+                    int length = getIntBE(buf, 8);
 
-                    int srcOff = HDR;
-
-                    while (remaining > 0) {
-                        int n = Math.min(remaining, staging.capacity());
-                        staging.clear();
-                        staging.put(buf, srcOff, n);
-                        staging.flip();
-
-                        long p = filePos;
-                        while (staging.hasRemaining()) {
-                            int w = channel.write(staging, p);
-                            p += w;
-                        }
-
-                        filePos += n;
-                        srcOff += n;
-                        remaining -= n;
+                    ByteBuffer byteBuffer = ByteBuffer.wrap(buf, HDR, length);
+                    while(byteBuffer.hasRemaining()) {
+                        int w = channel.write(byteBuffer, offset);
+                        offset += w;
                     }
 
                     bufferPool.offer(buf);
