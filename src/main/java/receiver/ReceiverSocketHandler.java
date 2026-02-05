@@ -95,6 +95,7 @@ public class ReceiverSocketHandler {
                             acceptTransferSessionPayload.getLocalUfrag(),
                             acceptTransferSessionPayload.getLocalPassword(), (state, component) -> {
                                 if(state == IceProcessingState.COMPLETED) {
+                                    ReceiverLogger.info("ICE complete.");
                                         ReceiverWorker.getIoWorker().submit(() -> {
                                             try {
                                                 ReceiverStream receiverStream = new ReceiverStream(component, receiverConfig);
@@ -106,8 +107,9 @@ public class ReceiverSocketHandler {
                                         });
 
                                 }
+
                             });
-                    ReceiverLogger.info("Started connection.");
+
                 } catch (UnknownHostException e) {
                     ReceiverLogger.error("Failed to connect to host: " + e.getMessage());
                 }

@@ -41,9 +41,9 @@ public class ReceiverStream {
     private Path outDir;
     private volatile Path outFile;
 
-    private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(1024);
+    private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(8192);
 
-    private final ArrayBlockingQueue<byte[]> bufferPool = new ArrayBlockingQueue<>(2048);
+    private final ArrayBlockingQueue<byte[]> bufferPool = new ArrayBlockingQueue<>(8192);
 
     private ServerConnector serverConnector;
 

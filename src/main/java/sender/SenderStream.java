@@ -82,7 +82,7 @@ public class SenderStream {
             bufferPool.add(new byte[chunkSize + HDR]);
         }
 
-        int queueCapacity = Math.max(totalStreams * 64, 128);
+        int queueCapacity = 8192;
         ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(queueCapacity);
         AtomicLong sentBytes = new AtomicLong(0);
         AtomicBoolean diskDone = new AtomicBoolean(false);
