@@ -64,7 +64,7 @@ public class ReceiverStream {
 
     private void handleStream(QuicStream stream) {
 
-        try (DataInputStream is = new DataInputStream(new BufferedInputStream(stream.getInputStream(), 256 * 1024)))  {
+        try (DataInputStream is = new DataInputStream(stream.getInputStream()))  {
             int first = is.read();
             if (first == -1) return;
 
@@ -156,8 +156,8 @@ public class ReceiverStream {
             throw new IllegalArgumentException("0 connections formed");
         }
 
-        int queueCapacity = 4096;
-        int bufferPoolSize = 4096;
+        int queueCapacity = clamp(4*receiverConfig.totalStreams, 512, 8192);
+        int bufferPoolSize = queueCapacity + 2 * receiverConfig.totalStreams;
 
         queue = new ArrayBlockingQueue<>(queueCapacity);
         bufferPool = new ArrayBlockingQueue<>(bufferPoolSize);

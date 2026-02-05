@@ -87,8 +87,8 @@ public class SenderStream {
         int chunkSize = config.chunkSize;
         int totalStreams = config.totalStreams;
 
-        int queueCapacity = 4096;
-        int bufferPoolSize = 4096;
+        int queueCapacity = clamp(4*config.totalStreams, 512, 8192);
+        int bufferPoolSize = queueCapacity + 2 * config.totalStreams;
 
         bufferPool = new ArrayBlockingQueue<>(bufferPoolSize);
 
@@ -172,7 +172,7 @@ public class SenderStream {
                 ioHandler.submit(() -> {
                     try {
                         QuicStream stream = connection.createStream(true);
-                        try (DataOutputStream os = new DataOutputStream(new BufferedOutputStream(stream.getOutputStream(), 256 * 1024))) {
+                        try (DataOutputStream os = new DataOutputStream(stream.getOutputStream())) {
                             writeMetadata(os, fileSize, fileNameBytes, chunkSize);
 
                             while (true) {
