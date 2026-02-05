@@ -102,15 +102,15 @@ public class ReceiverSocketHandler {
                                 for (Component component : components) {
                                     ReceiverLogger.info("component id=" + component.getComponentID() + ", selected pair=" + component.getSelectedPair().toShortString());
                                 }
-                                ReceiverWorker.getIoWorker().submit(() -> {
-                                    try {
-                                        ReceiverStream receiverStream = new ReceiverStream(components, receiverConfig);
-                                        receiverStream.receiveTransfer();
-                                    } catch (Exception e) {
-                                        e.printStackTrace();
-                                        ReceiverLogger.error("Error while receiving transfer : " + e.getMessage());
-                                    }
-                                });
+//                                ReceiverWorker.getIoWorker().submit(() -> {
+//                                    try {
+//                                        ReceiverStream receiverStream = new ReceiverStream(components, receiverConfig);
+//                                        receiverStream.receiveTransfer();
+//                                    } catch (Exception e) {
+//                                        e.printStackTrace();
+//                                        ReceiverLogger.error("Error while receiving transfer : " + e.getMessage());
+//                                    }
+//                                });
 
 
                             });
