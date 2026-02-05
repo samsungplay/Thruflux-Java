@@ -48,7 +48,7 @@ public class IceHandler {
         if (c == null) return false;
         TransportAddress ta = c.getTransportAddress();
         if (ta == null) return false;
-        if (ta.getTransport() != Transport.UDP) return false;
+//        if (ta.getTransport() != Transport.UDP) return false;
         return shouldSendAddress(ta.getAddress());
     }
 
