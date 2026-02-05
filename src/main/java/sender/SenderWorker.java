@@ -7,6 +7,8 @@ import java.util.concurrent.ScheduledExecutorService;
 public class SenderWorker {
     private static final ExecutorService fileWorker = Executors.newSingleThreadExecutor();
     private static final ScheduledExecutorService renderWorker = Executors.newSingleThreadScheduledExecutor();
+    private static final ExecutorService networkWorker = Executors.newVirtualThreadPerTaskExecutor();
+    private static final ExecutorService ioWorker = Executors.newCachedThreadPool();
 
 
     public static ExecutorService getFileWorker() {
@@ -17,9 +19,11 @@ public class SenderWorker {
         return renderWorker;
     }
 
-    public static void submit(Runnable runnable) {
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            executor.submit(runnable);
-        }
+    public static ExecutorService getNetworkWorker() {
+        return networkWorker;
+    }
+
+    public static ExecutorService getIoWorker() {
+        return ioWorker;
     }
 }

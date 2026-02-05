@@ -195,7 +195,7 @@ public class ReceiverStream {
                     (protocol, connection) -> new ApplicationProtocolConnection() {
                         @Override
                         public void acceptPeerInitiatedStream(QuicStream stream) {
-                            ReceiverWorker.submit(() -> handleStream(stream));
+                            ReceiverWorker.getIoWorker().submit(() -> handleStream(stream));
                         }
                     });
             serverConnectors.add(serverConnector);
@@ -310,6 +310,7 @@ public class ReceiverStream {
             Thread.currentThread().interrupt();
         } finally {
             for(ServerConnector serverConnector : serverConnectors) serverConnector.close();
+            ReceiverWorker.getIoWorker().shutdown();
             System.exit(0);
         }
     }
