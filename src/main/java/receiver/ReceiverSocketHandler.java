@@ -69,7 +69,7 @@ public class ReceiverSocketHandler {
                 IceHandler.addTurnServer(Utils.toTurnServer(turnCredentialsPayload.getTurnUrl(), turnCredentialsPayload.getUsername(), turnCredentialsPayload.getPassword()));
             }
             ReceiverLogger.info("Connecting to host...");
-            ReceiverWorker.getNetworkWorker().submit(() -> {
+            ReceiverWorker.submit(() -> {
                 try {
                     IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(false, receiverConfig.totalConnections);
                     session.getRemote().sendString(mapper.writeValueAsString(new JoinTransferSessionPayload(
@@ -89,7 +89,7 @@ public class ReceiverSocketHandler {
             session.close(1011, "Join session request rejected");
         } else if (payload instanceof AcceptTransferSessionPayload acceptTransferSessionPayload) {
             ReceiverLogger.info("Accepted. Starting connection..");
-            ReceiverWorker.getNetworkWorker().submit(() -> {
+            ReceiverWorker.submit(() -> {
                 try {
                     IceHandler.establishConnection(acceptTransferSessionPayload.getLocalCandidates(),
                             acceptTransferSessionPayload.getLocalUfrag(),
@@ -98,7 +98,7 @@ public class ReceiverSocketHandler {
                                     for(Component component : components) {
                                         ReceiverLogger.info("component id=" + component.getComponentID() + ", selected pair=" + component.getSelectedPair().toShortString());
                                     }
-                                        ReceiverWorker.getIoWorker().submit(() -> {
+                                        ReceiverWorker.submit(() -> {
                                             try {
                                                 ReceiverStream receiverStream = new ReceiverStream(components, receiverConfig);
                                                 receiverStream.receiveTransfer();

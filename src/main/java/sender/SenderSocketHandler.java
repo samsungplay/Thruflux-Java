@@ -84,7 +84,7 @@ public class SenderSocketHandler {
             String receiverId = joinTransferSessionPayload.getReceiverId();
             SenderStateHolder.addReceiver(receiverId);
             SenderStateHolder.ReceiverInfo receiverInfo = SenderStateHolder.getReceiver(receiverId);
-            SenderWorker.getNetworkWorker().submit(() -> {
+            SenderWorker.submit(() -> {
                 try {
                     IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(true, senderConfig.totalConnections);
                     IceHandler.establishConnection(joinTransferSessionPayload.getLocalCandidates(), joinTransferSessionPayload.getLocalUfrag(), joinTransferSessionPayload.getLocalPassword(),
@@ -94,7 +94,7 @@ public class SenderSocketHandler {
                                     for(Component component : components) {
                                         SenderLogger.info("component id=" + component.getComponentID() + ", pair=" + component.getSelectedPair().toShortString());
                                     }
-                                    SenderWorker.getIoWorker().submit(() -> {
+                                    SenderWorker.submit(() -> {
                                         try {
                                             receiverInfo.getStatus().set("SENDING");
                                             SenderStream senderStream = new SenderStream(components, senderConfig);
