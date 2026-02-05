@@ -112,7 +112,9 @@ public class IceHandler {
 
         agent.addStateChangeListener(evt -> {
             if(evt.getPropertyName().equals(Agent.PROPERTY_ICE_PROCESSING_STATE)) {
+
                 IceProcessingState state = (IceProcessingState) evt.getNewValue();
+                System.out.println("Hmm.." + state);
                 if (state == IceProcessingState.TERMINATED) {
                    connectionCallback.accept(iceStream.getComponents().stream().filter(c -> c.getSelectedPair() != null).collect(Collectors.toCollection(ArrayList::new)));
                 }
