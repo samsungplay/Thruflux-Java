@@ -109,6 +109,7 @@ public class IceHandler {
             }
             RemoteCandidate remoteCandidate = Utils.deserializeCandidate(serializedCandidate, component);
             component.addRemoteCandidate(remoteCandidate);
+            components.add(component);
         }
 
         agent.addStateChangeListener(evt -> {
