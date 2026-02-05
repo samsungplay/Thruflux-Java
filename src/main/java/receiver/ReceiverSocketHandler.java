@@ -93,21 +93,24 @@ public class ReceiverSocketHandler {
                 try {
                     IceHandler.establishConnection(acceptTransferSessionPayload.getLocalCandidates(),
                             acceptTransferSessionPayload.getLocalUfrag(),
-                            acceptTransferSessionPayload.getLocalPassword(), ( components) -> {
-                                    ReceiverLogger.info("ICE complete.");
-                                    for(Component component : components) {
-                                        ReceiverLogger.info("component id=" + component.getComponentID() + ", selected pair=" + component.getSelectedPair().toShortString());
+                            acceptTransferSessionPayload.getLocalPassword(), (components) -> {
+                                if (components.isEmpty()) {
+                                    ReceiverLogger.info("Failed to establish ICE connection.");
+                                    return;
+                                }
+                                ReceiverLogger.info("ICE complete.");
+                                for (Component component : components) {
+                                    ReceiverLogger.info("component id=" + component.getComponentID() + ", selected pair=" + component.getSelectedPair().toShortString());
+                                }
+                                ReceiverWorker.getIoWorker().submit(() -> {
+                                    try {
+                                        ReceiverStream receiverStream = new ReceiverStream(components, receiverConfig);
+                                        receiverStream.receiveTransfer();
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                        ReceiverLogger.error("Error while receiving transfer : " + e.getMessage());
                                     }
-                                        ReceiverWorker.getIoWorker().submit(() -> {
-                                            try {
-                                                ReceiverStream receiverStream = new ReceiverStream(components, receiverConfig);
-                                                receiverStream.receiveTransfer();
-                                            } catch (Exception e) {
-                                                e.printStackTrace();
-                                                ReceiverLogger.error("Error while receiving transfer : " + e.getMessage());
-                                            }
-                                        });
-
+                                });
 
 
                             });

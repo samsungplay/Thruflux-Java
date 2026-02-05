@@ -89,6 +89,11 @@ public class SenderSocketHandler {
                     IceHandler.CandidatesResult candidatesResult = IceHandler.gatherAllCandidates(true, senderConfig.totalConnections);
                     IceHandler.establishConnection(joinTransferSessionPayload.getLocalCandidates(), joinTransferSessionPayload.getLocalUfrag(), joinTransferSessionPayload.getLocalPassword(),
                             ( components) -> {
+                                if(components.isEmpty()) {
+                                    receiverInfo.getStatus().set("UNREACHABLE");
+                                    SenderLogger.error("Failed to establish ICE connection.");
+                                    return;
+                                }
                                     receiverInfo.getStatus().set("CONNECTED");
                                     SenderLogger.info("ICE Complete.");
                                     for(Component component : components) {
@@ -106,9 +111,7 @@ public class SenderSocketHandler {
                                             receiverInfo.getStatus().set("FAILED");
                                         }
                                     });
-                                if(components.isEmpty()) {
-                                    receiverInfo.getStatus().set("UNREACHABLE");
-                                }
+
 
 
                             });

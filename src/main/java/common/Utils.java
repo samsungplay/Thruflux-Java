@@ -160,19 +160,19 @@ public class Utils {
 
 
     public static void disableExternalLogging() {
-//        LogManager.getLogManager().reset();
-//
-//        Logger root = Logger.getLogger("");
-//        root.setLevel(Level.OFF);
-//
-//        for (Handler h : root.getHandlers()) {
-//            h.setLevel(Level.OFF);
-//            root.removeHandler(h);
-//        }
-//
-//        Logger.getLogger("org.ice4j").setLevel(Level.OFF);
-//        Logger.getLogger("org.jitsi").setLevel(Level.OFF);
-//        Logger.getLogger("org.jitsi.utils.logging2").setLevel(Level.OFF);
+        LogManager.getLogManager().reset();
+
+        Logger root = Logger.getLogger("");
+        root.setLevel(Level.OFF);
+
+        for (Handler h : root.getHandlers()) {
+            h.setLevel(Level.OFF);
+            root.removeHandler(h);
+        }
+
+        Logger.getLogger("org.ice4j").setLevel(Level.OFF);
+        Logger.getLogger("org.jitsi").setLevel(Level.OFF);
+        Logger.getLogger("org.jitsi.utils.logging2").setLevel(Level.OFF);
 
     }
 

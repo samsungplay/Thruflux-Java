@@ -35,6 +35,23 @@ public class IceHandler {
 
     }
 
+    private static boolean shouldSendAddress(InetAddress addr) {
+        if (addr == null) return false;
+        if (addr.isAnyLocalAddress()) return false;
+        if (addr.isLoopbackAddress()) return false;
+        if (addr.isLinkLocalAddress()) return false;
+
+        return true;
+    }
+
+    private static boolean shouldSendCandidate(Candidate<?> c) {
+        if (c == null) return false;
+        TransportAddress ta = c.getTransportAddress();
+        if (ta == null) return false;
+        if (ta.getTransport() != Transport.UDP) return false;
+        return shouldSendAddress(ta.getAddress());
+    }
+
     public static void addStunServer(StunServer stunServer) {
         stunServers.add(stunServer);
     }
@@ -75,6 +92,7 @@ public class IceHandler {
         for (int i = 0; i < n; i++) {
             Component component = components.get(i);
             for (LocalCandidate localCandidate : component.getLocalCandidates()) {
+                if (!shouldSendCandidate(localCandidate)) continue;
                 SerializedCandidate serialized = Utils.serializeCandidate(localCandidate,component.getComponentID());
                 serializedCandidates.add(serialized);
             }
@@ -117,6 +135,8 @@ public class IceHandler {
                 System.out.println("Hmm.." + state);
                 if (state == IceProcessingState.TERMINATED) {
                    connectionCallback.accept(iceStream.getComponents().stream().filter(c -> c.getSelectedPair() != null).collect(Collectors.toCollection(ArrayList::new)));
+                } else if (state == IceProcessingState.FAILED) {
+                    connectionCallback.accept(List.of());
                 }
             }
         });
