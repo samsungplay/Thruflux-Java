@@ -117,11 +117,6 @@ public class SenderStream {
             connection.connect();
         }
 
-        ExecutorService ioHandler = Executors.newFixedThreadPool(totalStreams, runnable -> {
-            Thread thread = new Thread(runnable);
-            thread.setDaemon(true);
-            return thread;
-        });
 
         Thread diskThread = new Thread(() -> {
             try (InputStream is = new BufferedInputStream(Files.newInputStream(file), 1024 * 1024)) {
@@ -159,7 +154,6 @@ public class SenderStream {
         int rem  = totalStreams % totalConnections;
 
 
-        int streamsPerConnection = Math.max(1,totalStreams / connections.size());
 
         for (int i = 0; i < connections.size(); i++) {
 
@@ -167,7 +161,7 @@ public class SenderStream {
             int streamsThisConn = base + (i < rem ? 1 : 0);
 
             for(int j=0; j<streamsThisConn; j++) {
-                ioHandler.submit(() -> {
+                SenderWorker.submit(() -> {
                     try {
                         QuicStream stream = connection.createStream(true);
                         try (DataOutputStream os = new DataOutputStream(new BufferedOutputStream(stream.getOutputStream(), 256 * 1024))) {
@@ -216,7 +210,6 @@ public class SenderStream {
             Thread.currentThread().interrupt();
         } finally {
             progressReporter.shutdownNow();
-            ioHandler.shutdown();
             for(QuicClientConnection connection : connections)
                 connection.close();
         }
