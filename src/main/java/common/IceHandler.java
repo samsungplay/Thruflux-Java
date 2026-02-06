@@ -119,6 +119,7 @@ public class IceHandler {
         iceStream.setRemotePassword(remotePassword);
 
 
+
         for (SerializedCandidate serializedCandidate : remoteCandidates) {
             Component component = iceStream.getComponent(serializedCandidate.componentId());
             if(component == null) {

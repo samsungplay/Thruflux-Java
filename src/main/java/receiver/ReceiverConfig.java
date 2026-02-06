@@ -34,7 +34,7 @@ public class ReceiverConfig {
     @CommandLine.Option(names = "--total-streams", defaultValue = "64")
     int totalStreams;
 
-    @CommandLine.Option(names = "--chunk-size", defaultValue = "65536")
+    @CommandLine.Option(names = "--chunk-size", defaultValue = "16384")
     int chunkSize;
     boolean yes;
     @CommandLine.Option(names = "--no-resume")

@@ -24,7 +24,7 @@ public class SenderConfig {
     @CommandLine.Option(names="--quic-max-incoming-streams", defaultValue = "256")
     int quicMaxIncomingStreams;
 
-    @CommandLine.Option(names="--chunk-size", defaultValue = "65536")
+    @CommandLine.Option(names="--chunk-size", defaultValue = "16384")
     int chunkSize;
 
     @CommandLine.Option(names="--total-connections", defaultValue = "4")

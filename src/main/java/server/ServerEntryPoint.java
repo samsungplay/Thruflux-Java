@@ -25,7 +25,6 @@ public class ServerEntryPoint implements Runnable {
     @Override
     public void run() {
         TransferSessionStore.INSTANCE = new TransferSessionStore(serverConfig);
-        ServerModerator.setServerConfig(serverConfig);
         Server server = new Server(serverConfig.port);
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
